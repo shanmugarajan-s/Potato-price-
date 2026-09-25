@@ -44,11 +44,64 @@ if not DATA_PATH.exists():
 # ------------------------------------------------------------
 # Data loading
 # ------------------------------------------------------------
+@BASE_DIR = Path(__file__).resolve().parent
+
+
+def find_dataset():
+    """
+    Automatically find the potato price CSV anywhere
+    inside the GitHub repository.
+    """
+
+    possible_names = [
+        "Potato_Price_TimeSeries_Weather_Dataset.csv",
+        "Potato_Price_TimeSeries_Weather_Dataset.CSV",
+    ]
+
+    # Check repository root
+    for name in possible_names:
+        path = BASE_DIR / name
+        if path.exists():
+            return path
+
+    # Check data folder
+    for name in possible_names:
+        path = BASE_DIR / "data" / name
+        if path.exists():
+            return path
+
+    # Search all folders
+    for path in BASE_DIR.rglob("*.csv"):
+        if "Potato_Price_TimeSeries_Weather_Dataset" in path.name:
+            return path
+
+    raise FileNotFoundError(
+        "Potato dataset CSV was not found. "
+        "Please upload Potato_Price_TimeSeries_Weather_Dataset.csv "
+        "to the GitHub repository."
+    )
+
+
+DATA_PATH = find_dataset()
+
+
 @st.cache_data
 def load_data():
+
     df = pd.read_csv(DATA_PATH)
-    df["Arrival_Date"] = pd.to_datetime(df["Arrival_Date"], errors="coerce")
-    df = df.dropna(subset=["Arrival_Date", "Modal_Price_Rs_per_Quintal"]).copy()
+
+    df["Arrival_Date"] = pd.to_datetime(
+        df["Arrival_Date"],
+        errors="coerce"
+    )
+
+    df = df.dropna(
+        subset=[
+            "Arrival_Date",
+            "Modal_Price_Rs_per_Quintal"
+        ]
+    ).copy()
+
     df = df.sort_values("Arrival_Date")
 
     numeric_cols = [
@@ -59,14 +112,16 @@ def load_data():
         "Max_Price_Rs_per_Quintal",
         "Modal_Price_Rs_per_Quintal",
     ]
+
     for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = pd.to_numeric(
+            df[col],
+            errors="coerce"
+        )
 
-    return df.dropna(subset=["Modal_Price_Rs_per_Quintal"])
-
-
-df = load_data()
-
+    return df.dropna(
+        subset=["Modal_Price_Rs_per_Quintal"]
+    )
 # ------------------------------------------------------------
 # National weekly time series + model features
 # ------------------------------------------------------------
