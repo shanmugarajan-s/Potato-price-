@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Potato Price Intelligence — Dashboard & Chat</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f7f5f0; --card:#ffffff; --ink:#1f2a1f; --sub:#5c6b5c; --accent:#3f7d3f; --accent2:#c96a3a;
+  --border:#e2e0d5; --shadow:0 1px 3px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#141912;--card:#1c231b;--ink:#eef0e8;--sub:#a3ac9c;--accent:#7fbf7f;--accent2:#e08a5c;--border:#2b332a;--shadow:0 1px 3px rgba(0,0,0,.4);}
+}
+:root[data-theme="dark"]{--bg:#141912;--card:#1c231b;--ink:#eef0e8;--sub:#a3ac9c;--accent:#7fbf7f;--accent2:#e08a5c;--border:#2b332a;--shadow:0 1px 3px rgba(0,0,0,.4);}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,'Iowan Old Style',serif;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+header{padding:22px 20px 6px;text-align:center}
+header h1{margin:0 0 4px;font-size:1.5rem;font-weight:600}
+header p{margin:0;color:var(--sub);font-size:.85rem;font-family:-apple-system,Helvetica,Arial,sans-serif}
+.tabs{display:flex;justify-content:center;gap:8px;margin:14px 0;font-family:-apple-system,Helvetica,Arial,sans-serif}
+.tab{padding:8px 18px;border-radius:20px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:.9rem;color:var(--sub)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+main{max-width:1000px;margin:0 auto;padding:0 16px 40px}
+.view{display:none}
+.view.active{display:block}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;box-shadow:var(--shadow)}
+.kpi .n{font-size:1.35rem;font-weight:700;color:var(--accent)}
+.kpi .l{font-size:.72rem;color:var(--sub);font-family:-apple-system,Helvetica,Arial,sans-serif;margin-top:2px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 10px;font-size:1rem;font-family:-apple-system,Helvetica,Arial,sans-serif}
+.card .note{font-size:.76rem;color:var(--sub);font-family:-apple-system,Helvetica,Arial,sans-serif;margin-top:8px}
+canvas{max-height:260px}
+table{width:100%;border-collapse:collapse;font-size:.8rem;font-family:-apple-system,Helvetica,Arial,sans-serif}
+th,td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left}
+th{color:var(--sub);font-weight:600}
+#chatWrap{display:flex;flex-direction:column;height:70vh;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+#msgs{flex:1;overflow-y:auto;padding:16px;font-family:-apple-system,Helvetica,Arial,sans-serif}
+.msg{max-width:80%;padding:10px 14px;border-radius:14px;margin-bottom:10px;font-size:.92rem;line-height:1.4}
+.msg.bot{background:var(--bg);border:1px solid var(--border);border-bottom-left-radius:2px}
+.msg.user{background:var(--accent);color:#fff;margin-left:auto;border-bottom-right-radius:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 10px;font-family:-apple-system,Helvetica,Arial,sans-serif}
+.chip{border:1px solid var(--border);background:var(--bg);color:var(--sub);padding:5px 10px;border-radius:14px;font-size:.75rem;cursor:pointer}
+#inputRow{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}
+#inputRow input{flex:1;padding:10px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:.92rem}
+#inputRow button{padding:10px 18px;border-radius:20px;border:none;background:var(--accent);color:#fff;font-family:-apple-system,Helvetica,Arial,sans-serif;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>🥔 Potato Price Intelligence</h1>
+  <p id="dateRange">Weekly time-series + weather dataset · 305 markets · 22 states</p><p style="margin:6px auto 0;max-width:850px;color:var(--sub);font:0.72rem -apple-system,Helvetica,Arial,sans-serif">Academic dataset note: the 52-week history and weather extension are documented simulation anchored to a market-price snapshot.</p>
+</header>
+<div class="tabs">
+  <div class="tab active" data-view="dash">Dashboard</div>
+  <div class="tab" data-view="chat">Ask about prices</div>
+</div>
+<main>
+  <section id="dash" class="view active">
+    <div class="kpis" id="kpis"></div>
+    <div class="grid">
+      <div class="card"><h3>Value of price history: R² with vs without lag features</h3><canvas id="chartLagVsNoLag"></canvas>
+        <p class="note">Season+weather alone forecast weakly (R²≈0.75); adding last-week price history lifts R² above 0.99.</p></div>
+      <div class="card"><h3>Model comparison (with price history)</h3><canvas id="chartModels"></canvas></div>
+      <div class="card"><h3>Average price by season</h3><canvas id="chartSeason"></canvas></div>
+      <div class="card"><h3>52-week national price trend</h3><canvas id="chartTrend"></canvas></div>
+      <div class="card"><h3>Top states by current price</h3><canvas id="chartStates"></canvas></div>
+      <div class="card"><h3>Tuned Random Forest (best config)</h3>
+        <table><tr><th>Metric</th><th>Value</th></tr>
+          <tr><td>Best params</td><td id="bestParams"></td></tr>
+          <tr><td>CV R² (mean)</td><td id="cvMean"></td></tr>
+          <tr><td>Test MAE</td><td id="tunedMAE"></td></tr>
+          <tr><td>Test RMSE</td><td id="tunedRMSE"></td></tr>
+          <tr><td>Test R²</td><td id="tunedR2"></td></tr>
+        </table></div>
+    </div>
+    <div class="card"><h3>Random Forest hyperparameter sweep (R² on held-out final 8 weeks)</h3>
+      <div style="overflow-x:auto"><table id="hpTable"></table></div>
+    </div>
+  </section>
+  <section id="chat" class="view">
+    <div id="chatWrap">
+      <div id="msgs"></div>
+      <div class="chips" id="chips"></div>
+      <div id="inputRow">
+        <input id="chatInput" placeholder="e.g. price in Kerala during monsoon" />
+        <button id="sendBtn">Send</button>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+const DATA = JSON.parse(`{"overall":{"avg_price":2478.0,"n_states":22,"n_records":16016,"n_markets":305,"date_range":"2025-10-03 to 2026-09-25","top_states":{"Keralam":4200.0,"Tamil Nadu":3757.0,"Manipur":2250.0,"Telangana":2250.0,"Odisha":2022.0}},"state_stats":[{"State":"Andhra Pradesh","avg":1600.0,"minp":1596.0,"maxp":1604.0,"n":1},{"State":"Assam","avg":1550.0,"minp":1499.0,"maxp":1601.0,"n":4},{"State":"Bihar","avg":1325.0,"minp":1099.0,"maxp":1666.0,"n":8},{"State":"Chandigarh","avg":1000.0,"minp":996.0,"maxp":1005.0,"n":1},{"State":"Gujarat","avg":1164.0,"minp":990.0,"maxp":1752.0,"n":7},{"State":"Haryana","avg":947.0,"minp":699.0,"maxp":1204.0,"n":16},{"State":"Himachal Pradesh","avg":1570.0,"minp":799.0,"maxp":2006.0,"n":10},{"State":"Karnataka","avg":2000.0,"minp":1698.0,"maxp":2303.0,"n":2},{"State":"Keralam","avg":4200.0,"minp":2400.0,"maxp":6502.0,"n":7},{"State":"Madhya Pradesh","avg":800.0,"minp":574.0,"maxp":1002.0,"n":4},{"State":"Maharashtra","avg":1050.0,"minp":1048.0,"maxp":1052.0,"n":1},{"State":"Manipur","avg":2250.0,"minp":2247.0,"maxp":2252.0,"n":1},{"State":"Meghalaya","avg":1500.0,"minp":1499.0,"maxp":1501.0,"n":1},{"State":"Odisha","avg":2022.0,"minp":1099.0,"maxp":3774.0,"n":9},{"State":"Punjab","avg":743.0,"minp":1.0,"maxp":1563.0,"n":27},{"State":"Rajasthan","avg":1000.0,"minp":498.0,"maxp":1501.0,"n":5},{"State":"Tamil Nadu","avg":3757.0,"minp":2247.0,"maxp":6676.0,"n":153},{"State":"Telangana","avg":2250.0,"minp":1748.0,"maxp":3140.0,"n":3},{"State":"Tripura","avg":1900.0,"minp":1899.0,"maxp":1901.0,"n":1},{"State":"Uttar Pradesh","avg":696.0,"minp":434.0,"maxp":1710.0,"n":26},{"State":"Uttarakhand","avg":1033.0,"minp":599.0,"maxp":1687.0,"n":6},{"State":"West Bengal","avg":830.0,"minp":590.0,"maxp":1401.0,"n":15}],"state_season":[{"State":"Andhra Pradesh","Season":"Monsoon","Modal_Price":1586.0},{"State":"Andhra Pradesh","Season":"Post-Monsoon","Modal_Price":1764.0},{"State":"Andhra Pradesh","Season":"Summer","Modal_Price":1427.0},{"State":"Andhra Pradesh","Season":"Winter","Modal_Price":1172.0},{"State":"Assam","Season":"Monsoon","Modal_Price":1533.0},{"State":"Assam","Season":"Post-Monsoon","Modal_Price":1514.0},{"State":"Assam","Season":"Summer","Modal_Price":1286.0},{"State":"Assam","Season":"Winter","Modal_Price":1044.0},{"State":"Bihar","Season":"Monsoon","Modal_Price":1298.0},{"State":"Bihar","Season":"Post-Monsoon","Modal_Price":1230.0},{"State":"Bihar","Season":"Summer","Modal_Price":1072.0},{"State":"Bihar","Season":"Winter","Modal_Price":866.0},{"State":"Chandigarh","Season":"Monsoon","Modal_Price":1009.0},{"State":"Chandigarh","Season":"Post-Monsoon","Modal_Price":974.0},{"State":"Chandigarh","Season":"Summer","Modal_Price":846.0},{"State":"Chandigarh","Season":"Winter","Modal_Price":688.0},{"State":"Gujarat","Season":"Monsoon","Modal_Price":1165.0},{"State":"Gujarat","Season":"Post-Monsoon","Modal_Price":1217.0},{"State":"Gujarat","Season":"Summer","Modal_Price":1009.0},{"State":"Gujarat","Season":"Winter","Modal_Price":830.0},{"State":"Haryana","Season":"Monsoon","Modal_Price":945.0},{"State":"Haryana","Season":"Post-Monsoon","Modal_Price":992.0},{"State":"Haryana","Season":"Summer","Modal_Price":831.0},{"State":"Haryana","Season":"Winter","Modal_Price":685.0},{"State":"Himachal Pradesh","Season":"Monsoon","Modal_Price":1567.0},{"State":"Himachal Pradesh","Season":"Post-Monsoon","Modal_Price":1581.0},{"State":"Himachal Pradesh","Season":"Summer","Modal_Price":1333.0},{"State":"Himachal Pradesh","Season":"Winter","Modal_Price":1103.0},{"State":"Karnataka","Season":"Monsoon","Modal_Price":1998.0},{"State":"Karnataka","Season":"Post-Monsoon","Modal_Price":2026.0},{"State":"Karnataka","Season":"Summer","Modal_Price":1659.0},{"State":"Karnataka","Season":"Winter","Modal_Price":1399.0},{"State":"Keralam","Season":"Monsoon","Modal_Price":4178.0},{"State":"Keralam","Season":"Post-Monsoon","Modal_Price":4304.0},{"State":"Keralam","Season":"Summer","Modal_Price":3617.0},{"State":"Keralam","Season":"Winter","Modal_Price":2953.0},{"State":"Madhya Pradesh","Season":"Monsoon","Modal_Price":773.0},{"State":"Madhya Pradesh","Season":"Post-Monsoon","Modal_Price":845.0},{"State":"Madhya Pradesh","Season":"Summer","Modal_Price":671.0},{"State":"Madhya Pradesh","Season":"Winter","Modal_Price":575.0},{"State":"Maharashtra","Season":"Monsoon","Modal_Price":1038.0},{"State":"Maharashtra","Season":"Post-Monsoon","Modal_Price":985.0},{"State":"Maharashtra","Season":"Summer","Modal_Price":876.0},{"State":"Maharashtra","Season":"Winter","Modal_Price":686.0},{"State":"Manipur","Season":"Monsoon","Modal_Price":2175.0},{"State":"Manipur","Season":"Post-Monsoon","Modal_Price":2090.0},{"State":"Manipur","Season":"Summer","Modal_Price":1811.0},{"State":"Manipur","Season":"Winter","Modal_Price":1460.0},{"State":"Meghalaya","Season":"Monsoon","Modal_Price":1622.0},{"State":"Meghalaya","Season":"Post-Monsoon","Modal_Price":1859.0},{"State":"Meghalaya","Season":"Summer","Modal_Price":1556.0},{"State":"Meghalaya","Season":"Winter","Modal_Price":1340.0},{"State":"Odisha","Season":"Monsoon","Modal_Price":2005.0},{"State":"Odisha","Season":"Post-Monsoon","Modal_Price":2062.0},{"State":"Odisha","Season":"Summer","Modal_Price":1703.0},{"State":"Odisha","Season":"Winter","Modal_Price":1413.0},{"State":"Punjab","Season":"Monsoon","Modal_Price":730.0},{"State":"Punjab","Season":"Post-Monsoon","Modal_Price":730.0},{"State":"Punjab","Season":"Summer","Modal_Price":612.0},{"State":"Punjab","Season":"Winter","Modal_Price":501.0},{"State":"Rajasthan","Season":"Monsoon","Modal_Price":999.0},{"State":"Rajasthan","Season":"Post-Monsoon","Modal_Price":1032.0},{"State":"Rajasthan","Season":"Summer","Modal_Price":847.0},{"State":"Rajasthan","Season":"Winter","Modal_Price":706.0},{"State":"Tamil Nadu","Season":"Monsoon","Modal_Price":3725.0},{"State":"Tamil Nadu","Season":"Post-Monsoon","Modal_Price":3695.0},{"State":"Tamil Nadu","Season":"Summer","Modal_Price":3112.0},{"State":"Tamil Nadu","Season":"Winter","Modal_Price":2553.0},{"State":"Telangana","Season":"Monsoon","Modal_Price":2241.0},{"State":"Telangana","Season":"Post-Monsoon","Modal_Price":2426.0},{"State":"Telangana","Season":"Summer","Modal_Price":1962.0},{"State":"Telangana","Season":"Winter","Modal_Price":1676.0},{"State":"Tripura","Season":"Monsoon","Modal_Price":1835.0},{"State":"Tripura","Season":"Post-Monsoon","Modal_Price":1790.0},{"State":"Tripura","Season":"Summer","Modal_Price":1558.0},{"State":"Tripura","Season":"Winter","Modal_Price":1245.0},{"State":"Uttar Pradesh","Season":"Monsoon","Modal_Price":692.0},{"State":"Uttar Pradesh","Season":"Post-Monsoon","Modal_Price":719.0},{"State":"Uttar Pradesh","Season":"Summer","Modal_Price":597.0},{"State":"Uttar Pradesh","Season":"Winter","Modal_Price":499.0},{"State":"Uttarakhand","Season":"Monsoon","Modal_Price":1009.0},{"State":"Uttarakhand","Season":"Post-Monsoon","Modal_Price":1049.0},{"State":"Uttarakhand","Season":"Summer","Modal_Price":868.0},{"State":"Uttarakhand","Season":"Winter","Modal_Price":729.0},{"State":"West Bengal","Season":"Monsoon","Modal_Price":822.0},{"State":"West Bengal","Season":"Post-Monsoon","Modal_Price":837.0},{"State":"West Bengal","Season":"Summer","Modal_Price":690.0},{"State":"West Bengal","Season":"Winter","Modal_Price":570.0}],"season_avg":{"Monsoon":2457.0,"Post-Monsoon":2457.0,"Summer":2065.0,"Winter":1697.0},"monthly_trend":{"1":1694.0,"2":1713.0,"3":2034.0,"4":2052.0,"5":2073.0,"6":2099.0,"7":2444.0,"8":2459.0,"9":2472.0,"10":2452.0,"11":2463.0,"12":1684.0},"model_comparison":{"no_lag_rf":{"MAE":539.52,"RMSE":787.96,"R2":0.7496},"with_lag_rf":{"MAE":85.93,"RMSE":124.41,"R2":0.9938},"simple_lr":{"MAE":33.34,"RMSE":48.49,"R2":0.9991},"multi_lr":{"MAE":33.4,"RMSE":48.51,"R2":0.9991},"poly":{"MAE":35.78,"RMSE":55.51,"R2":0.9988},"ridge":{"MAE":33.4,"RMSE":48.51,"R2":0.9991}},"hp_grid":[{"n_estimators":10,"max_depth":3,"MAE":173.39,"RMSE":233.83,"R2":0.978},{"n_estimators":10,"max_depth":5,"MAE":63.59,"RMSE":100.69,"R2":0.9959},{"n_estimators":10,"max_depth":10,"MAE":76.95,"RMSE":117.06,"R2":0.9945},{"n_estimators":10,"max_depth":"None","MAE":90.04,"RMSE":134.04,"R2":0.9928},{"n_estimators":50,"max_depth":3,"MAE":170.71,"RMSE":228.88,"R2":0.9789},{"n_estimators":50,"max_depth":5,"MAE":59.95,"RMSE":97.43,"R2":0.9962},{"n_estimators":50,"max_depth":10,"MAE":76.78,"RMSE":113.85,"R2":0.9948},{"n_estimators":50,"max_depth":"None","MAE":86.09,"RMSE":124.88,"R2":0.9937},{"n_estimators":100,"max_depth":3,"MAE":170.56,"RMSE":228.48,"R2":0.9789},{"n_estimators":100,"max_depth":5,"MAE":59.71,"RMSE":97.25,"R2":0.9962},{"n_estimators":100,"max_depth":10,"MAE":75.97,"RMSE":111.93,"R2":0.9949},{"n_estimators":100,"max_depth":"None","MAE":85.93,"RMSE":124.41,"R2":0.9938},{"n_estimators":200,"max_depth":3,"MAE":169.66,"RMSE":227.31,"R2":0.9792},{"n_estimators":200,"max_depth":5,"MAE":57.79,"RMSE":92.98,"R2":0.9965},{"n_estimators":200,"max_depth":10,"MAE":74.68,"RMSE":109.94,"R2":0.9951},{"n_estimators":200,"max_depth":"None","MAE":84.91,"RMSE":122.97,"R2":0.9939}],"tuned":{"MAE":74.68,"RMSE":109.94,"R2":0.9951},"best_params":{"max_depth":10,"min_samples_split":2,"n_estimators":200},"cv_mean":0.9814}`);
+document.getElementById('dateRange').textContent =
+  `Weekly time-series + weather dataset · ${DATA.overall.date_range} · ${DATA.overall.n_markets} markets · ${DATA.overall.n_states} states`;
+
+function fmtR(n){return "Rs "+Math.round(n).toLocaleString("en-IN");}
+
+document.getElementById('kpis').innerHTML = `
+  <div class="kpi"><div class="n">${fmtR(DATA.overall.avg_price)}</div><div class="l">Latest avg price / quintal</div></div>
+  <div class="kpi"><div class="n">${DATA.overall.n_records.toLocaleString()}</div><div class="l">Weekly records</div></div>
+  <div class="kpi"><div class="n">${DATA.overall.n_markets}</div><div class="l">Markets tracked</div></div>
+  <div class="kpi"><div class="n">${DATA.tuned.R2}</div><div class="l">Best model R² (test)</div></div>
+`;
+
+Chart.defaults.font.family = "-apple-system,Helvetica,Arial,sans-serif";
+const accent = '#3f7d3f', accent2='#c96a3a';
+
+new Chart(document.getElementById('chartLagVsNoLag'), {type:'bar',
+  data:{labels:['Without price history','With price history'],
+        datasets:[{data:[DATA.model_comparison.no_lag_rf.R2, DATA.model_comparison.with_lag_rf.R2], backgroundColor:[accent2, accent]}]},
+  options:{plugins:{legend:{display:false}}, scales:{y:{min:0,max:1}}}});
+
+const modelKeys = ['simple_lr','multi_lr','poly','ridge','with_lag_rf'];
+const modelLabels = ['Simple LR','Multiple LR','Polynomial','Ridge','Random Forest'];
+new Chart(document.getElementById('chartModels'), {type:'bar',
+  data:{labels:modelLabels, datasets:[{data:modelKeys.map(k=>DATA.model_comparison[k].R2), backgroundColor:accent}]},
+  options:{plugins:{legend:{display:false}}, scales:{y:{min:0.99,max:1.0}}}});
+
+const seasons = ["Winter","Summer","Monsoon","Post-Monsoon"];
+new Chart(document.getElementById('chartSeason'), {type:'bar',
+  data:{labels:seasons, datasets:[{data:seasons.map(s=>DATA.season_avg[s]), backgroundColor:'#2f6f8f'}]},
+  options:{plugins:{legend:{display:false}}}});
+
+const months = Object.keys(DATA.monthly_trend).sort((a,b)=>a-b);
+const monthNames = {1:'Jan',2:'Feb',3:'Mar',4:'Apr',5:'May',6:'Jun',7:'Jul',8:'Aug',9:'Sep',10:'Oct',11:'Nov',12:'Dec'};
+new Chart(document.getElementById('chartTrend'), {type:'line',
+  data:{labels:months.map(m=>monthNames[m]), datasets:[{data:months.map(m=>DATA.monthly_trend[m]), borderColor:accent2, backgroundColor:'transparent', tension:.3}]},
+  options:{plugins:{legend:{display:false}}}});
+
+const topStates = Object.entries(DATA.overall.top_states);
+new Chart(document.getElementById('chartStates'), {type:'bar',
+  data:{labels:topStates.map(s=>s[0]), datasets:[{data:topStates.map(s=>s[1]), backgroundColor:accent}]},
+  options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+
+document.getElementById('bestParams').textContent = JSON.stringify(DATA.best_params);
+document.getElementById('cvMean').textContent = DATA.cv_mean;
+document.getElementById('tunedMAE').textContent = fmtR(DATA.tuned.MAE);
+document.getElementById('tunedRMSE').textContent = fmtR(DATA.tuned.RMSE);
+document.getElementById('tunedR2').textContent = DATA.tuned.R2;
+
+let hpHtml = '<tr><th>n_estimators</th><th>max_depth</th><th>MAE</th><th>RMSE</th><th>R2</th></tr>';
+DATA.hp_grid.forEach(r=>{hpHtml += `<tr><td>${r.n_estimators}</td><td>${r.max_depth}</td><td>${r.MAE}</td><td>${r.RMSE}</td><td>${r.R2}</td></tr>`});
+document.getElementById('hpTable').innerHTML = hpHtml;
+
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.view).classList.add('active');
+}));
+
+const stateNames = [...new Set(DATA.state_stats.map(s=>s.State))];
+const seasonKeywords = ["post-monsoon","winter","summer","monsoon"];
+let chatContext = {state:null, season:null};
+
+function titleCase(s){return s.replace(/(^|-)(\w)/g, (m,d,c)=> d+c.toUpperCase());}
+
+function parseEntities(q){
+  const ql = q.toLowerCase();
+  const state = stateNames.find(s=>ql.includes(s.toLowerCase())) || null;
+  const season = seasonKeywords.find(s=>ql.includes(s)) || null;
+  return {state, season};
+}
+
+function answerQuery(q){
+  const ql = q.toLowerCase();
+  const explicit = parseEntities(q);
+
+  // Remember entities from earlier turns so "there", "that state", etc. work.
+  if(explicit.state) chatContext.state = explicit.state;
+  if(explicit.season) chatContext.season = explicit.season;
+
+  const matchedState = chatContext.state;
+  const matchedSeason = chatContext.season;
+
+  if(matchedState && matchedSeason){
+    const label = titleCase(matchedSeason);
+    const row = DATA.state_season.find(r=>r.State===matchedState && r.Season===label);
+    if(!row) return `No records found for ${matchedState} in ${label}.`;
+    return `In ${matchedState} during ${label}, the collected dataset has an average Potato modal price of ${fmtR(row.Modal_Price)} per quintal.`;
+  }
+
+  if(matchedState){
+    const row = DATA.state_stats.find(r=>r.State===matchedState);
+    if(!row) return `No current-week records for ${matchedState}.`;
+    return `As of the latest week (${DATA.overall.date_range.split(' to ')[1]}), Potato in ${matchedState} averages ${fmtR(row.avg)} per quintal across ${row.n} market record(s).`;
+  }
+
+  if(matchedSeason){
+    const label = titleCase(matchedSeason);
+    return `Nationally, the average Potato modal price during ${label} is ${fmtR(DATA.season_avg[label])} per quintal.`;
+  }
+
+  if(ql.includes('trend') || ql.includes('rising') || ql.includes('falling')){
+    return `The dashboard dataset shows a 52-week national price trend. The chart above provides the full weekly series and moving average.`;
+  }
+
+  if(ql.includes('highest') || ql.includes('top')){
+    const items = Object.entries(DATA.overall.top_states).map(([s,v])=>`${s}: ${fmtR(v)}`).join('; ');
+    return `Highest current average-price states in the dashboard data: ${items}.`;
+  }
+
+  return `Overall average Potato modal price in the latest week is ${fmtR(DATA.overall.avg_price)} per quintal across ${DATA.overall.n_states} states. Try a state, season, or follow-up question.`;
+}
+</script>
+</body>
+</html>
