@@ -36,9 +36,6 @@ st.markdown(
 
 BASE_DIR = Path(__file__).resolve().parent
 
-DATA_PATH = BASE_DIR / "data" / "Potato_Price_TimeSeries_Weather_Dataset.csv"
-
-if not DATA_PATH.exists():
     DATA_PATH = BASE_DIR / "Potato_Price_TimeSeries_Weather_Dataset.csv"
 
 # ------------------------------------------------------------
